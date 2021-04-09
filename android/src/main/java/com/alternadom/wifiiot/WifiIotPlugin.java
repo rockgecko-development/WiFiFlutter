@@ -79,20 +79,24 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
 
     // cleanup
     private void cleanup() {
+        Log.d(TAG, "Cleanup: " + ssidsToBeRemovedOnExit.size());
         if (!ssidsToBeRemovedOnExit.isEmpty()) {
             List<android.net.wifi.WifiConfiguration> wifiConfigList =
                     moWiFi.getConfiguredNetworks();
             for (String ssid : ssidsToBeRemovedOnExit) {
                 for (android.net.wifi.WifiConfiguration wifiConfig : wifiConfigList) {
                     if (wifiConfig.SSID.equals(ssid)) {
-                        moWiFi.removeNetwork(wifiConfig.networkId);
+                        boolean ok = moWiFi.removeNetwork(wifiConfig.networkId);
+                        Log.d(TAG, "Removed " + ssid + ": " + ok);
+
                     }
                 }
             }
         }
         if (!suggestionsToBeRemovedOnExit.isEmpty()) {
             moWiFi.removeNetworkSuggestions(suggestionsToBeRemovedOnExit);
-        }
+        }    
+        
         // setting all members to null to avoid memory leaks
         channel = null;
         eventChannel = null;
@@ -262,7 +266,7 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
                 break;
             case "showWritePermissionSettings":
                 showWritePermissionSettings(poCall, poResult);
-                break;
+                break;           
             default:
                 poResult.notImplemented();
                 break;
@@ -1021,6 +1025,11 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
                 if (wifiConfig.SSID.equals(conf.SSID)) {
                     conf.networkId = wifiConfig.networkId;
                     updateNetwork = moWiFi.updateNetwork(conf);
+                    //still return the networkId even if config could not be updated
+                    if(updateNetwork==-1)
+                        Log.e(TAG, "found, updateNetwork: "+updateNetwork);
+                    else Log.w(TAG, "found, updateNetwork: "+updateNetwork);
+                    return wifiConfig.networkId;
                 }
             }
         }
@@ -1028,6 +1037,7 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
         /// If network not already in configured networks add new network
         if (updateNetwork == -1) {
             updateNetwork = moWiFi.addNetwork(conf);
+            Log.d(TAG, "not found, added. updateNetwork: "+updateNetwork);
             moWiFi.saveConfiguration();
         }
 
@@ -1074,6 +1084,7 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
 
         return conf;
     }
+    final String TAG = "jet";
 
     @SuppressWarnings("deprecation")
     private Boolean connectToDeprecated(String ssid, String password, String security, Boolean joinOnce) {
@@ -1083,6 +1094,7 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
         int updateNetwork = registerWifiNetworkDeprecated(conf);
 
         if (updateNetwork == -1) {
+            Log.d(TAG, "updateNetwork -1");
             return false;
         }
 
@@ -1092,10 +1104,12 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
 
         boolean disconnect = moWiFi.disconnect();
         if (!disconnect) {
+            Log.d(TAG, "disconnect false");
             return false;
         }
 
         boolean enabled = moWiFi.enableNetwork(updateNetwork, true);
+        Log.d(TAG, "enableNetwork: "+ enabled);
         if (!enabled) return false;
 
         boolean connected = false;
@@ -1111,6 +1125,7 @@ public class WifiIotPlugin implements FlutterPlugin, ActivityAware, MethodCallHa
                 break;
             }
         }
+        Log.d(TAG, "connected: "+connected);
 
         return connected;
     }
